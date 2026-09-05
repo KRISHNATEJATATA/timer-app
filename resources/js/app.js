@@ -535,9 +535,13 @@ async function exportCsv() {
     return;
   }
   var defaultPath = dataDir + '/topic-timer-export.csv';
-  var chosen = await Neutralino.os.showSaveDialog('Export sessions to CSV', defaultPath);
+  var chosen = await Neutralino.os.showSaveDialog('Export sessions to CSV', {
+    defaultPath: defaultPath,
+    filters: [{ name: 'CSV files', extensions: ['csv'] }]
+  });
   var path = typeof chosen === 'string' ? chosen : (chosen && chosen.path);
   if (!path) return;
+  if (!/\.csv$/i.test(path)) path += '.csv';
   await Neutralino.filesystem.writeFile(path, TopicCore.sessionsToCsv(state.sessions));
   flash('Exported to ' + path);
 }

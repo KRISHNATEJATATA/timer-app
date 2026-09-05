@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Topic Timer — Dashboard</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Topic Timer</h1>
+    <div class="topbar-actions">
+      <button id="open-btn" class="btn primary">Open log.json…</button>
+      <button id="refresh-btn" class="btn" disabled>Refresh</button>
+      <button id="export-btn" class="btn" disabled>Download CSV</button>
+    </div>
+  </header>
+
+  <main id="app">
+    <section id="welcome" class="card center">
+      <h2>No log loaded</h2>
+      <p>Click <strong>Open log.json…</strong> and pick your timer's log file
+        (<code>data/TopicTimer/log.json</code>), or drag the file onto this page.</p>
+      <p class="hint">The file is read locally in your browser — nothing is uploaded.
+        Your choice is remembered; next visit just click <strong>Allow</strong>.</p>
+    </section>
+
+    <section id="live-banner" class="card live hidden">
+      <span class="pulse"></span>
+      <span id="live-text"></span>
+    </section>
+
+    <section id="stats-cards" class="cards hidden">
+      <div class="stat"><div class="stat-label">All-time tracked</div><div class="stat-value" id="stat-total">—</div></div>
+      <div class="stat"><div class="stat-label">Sessions</div><div class="stat-value" id="stat-count">—</div></div>
+      <div class="stat"><div class="stat-label">Avg session</div><div class="stat-value" id="stat-avg">—</div></div>
+      <div class="stat"><div class="stat-label">Topics</div><div class="stat-value" id="stat-topics">—</div></div>
+    </section>
+
+    <div id="views" class="hidden">
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-view="topics">Topics</button>
+        <button class="tab" data-view="trend">Trend</button>
+        <button class="tab" data-view="calendar">Calendar</button>
+        <button class="tab" data-view="sessions">Sessions</button>
+        <button class="tab" data-view="blocks">Work blocks</button>
+        <button class="tab" data-view="summaries">Summaries</button>
+      </nav>
+
+      <section id="view-topics" class="view">
+        <div class="split">
+          <div class="card"><h2>Total time per topic</h2><div id="topic-bars"></div></div>
+          <div class="card"><h2>Details</h2>
+            <table class="tbl" id="topic-table">
+              <thead><tr><th data-sort="display">Topic</th><th data-sort="totalSeconds">Total</th><th data-sort="sessionCount">Sessions</th><th data-sort="avgSeconds">Avg</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-trend" class="view hidden">
+        <div class="card">
+          <div class="row">
+            <h2>Daily trend</h2>
+            <div class="seg" id="trend-range">
+              <button data-days="7">7d</button>
+              <button data-days="14" class="active">14d</button>
+              <button data-days="30">30d</button>
+            </div>
+            <div class="seg" id="trend-mode">
+              <button data-mode="total" class="active">Total</button>
+              <button data-mode="stacked">By topic</button>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
+        </div>
+      </section>
+
+      <section id="view-calendar" class="view hidden">
+        <div class="card">
+          <div class="row">
+            <h2>Calendar</h2>
+            <div class="seg" id="cal-mode">
+              <button data-mode="month" class="active">Month</button>
+              <button data-mode="week">Week</button>
+            </div>
+          </div>
+          <div class="cal-split">
+            <div id="calendar"></div>
+            <div class="cal-side">
+              <h2 id="donut-title">By topic</h2>
+              <div class="chart-wrap donut"><canvas id="donut-chart"></canvas></div>
+              <div id="donut-legend" class="donut-legend"></div>
+            </div>
+          </div>
+          <div id="cal-day-detail" class="hidden"></div>
+        </div>
+      </section>
+
+      <section id="view-sessions" class="view hidden">
+        <div class="card">
+          <div class="row wrap">
+            <h2>Sessions</h2>
+            <select id="filter-topic"><option value="">All topics</option></select>
+            <label class="lbl">From <input type="date" id="filter-from"></label>
+            <label class="lbl">To <input type="date" id="filter-to"></label>
+            <button id="filter-clear" class="btn subtle">Clear</button>
+          </div>
+          <table class="tbl" id="session-table">
+            <thead><tr><th data-sort="start">Start</th><th data-sort="end">End</th><th data-sort="topicDisplay">Topic</th><th data-sort="elapsedSeconds">Duration</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="hint" id="session-count"></p>
+        </div>
+      </section>
+
+      <section id="view-blocks" class="view hidden">
+        <div class="card">
+          <h2>Work blocks <span class="hint inline">(same topic, gaps ≤ 15 min merged)</span></h2>
+          <table class="tbl" id="block-table">
+            <thead><tr><th data-sort="start">Start</th><th data-sort="end">End</th><th data-sort="topicDisplay">Topic</th><th data-sort="totalSeconds">Total</th><th data-sort="sessionCount">Sessions</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-topic" class="view hidden">
+        <div class="card">
+          <div class="row">
+            <button id="topic-back" class="btn subtle">← Back</button>
+            <h2 id="topic-detail-title" style="margin:0"></h2>
+          </div>
+          <div class="cards" id="topic-stat-cards"></div>
+          <h2>Daily trend — last 30 days</h2>
+          <div class="chart-wrap"><canvas id="topic-trend-chart"></canvas></div>
+          <h2 style="margin-top:18px">Sessions <span class="hint inline">(most recent first)</span></h2>
+          <table class="tbl" id="topic-sessions-table">
+            <thead><tr><th>Start</th><th>End</th><th>Duration</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-summaries" class="view hidden">
+        <div class="split">
+          <div class="card"><h2>Per day</h2><table class="tbl" id="day-table"><thead><tr><th>Day</th><th>Tracked</th></tr></thead><tbody></tbody></table></div>
+          <div class="card"><h2>Per week</h2><table class="tbl" id="week-table"><thead><tr><th>Week</th><th>Days</th><th>Tracked</th></tr></thead><tbody></tbody></table></div>
+          <div class="card"><h2>Per month</h2><table class="tbl" id="month-table"><thead><tr><th>Month</th><th>Tracked</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </section>
+    </div>
+
+    <section id="error" class="card center error hidden">
+      <h2 id="error-title">Something went wrong</h2>
+      <p id="error-text"></p>
+    </section>
+  </main>
+
+  <footer class="foot">Read-only. Data stays in your browser. <span id="loaded-from"></span></footer>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

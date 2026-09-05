@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx neu update
+      - run: npx neu build
+      - name: Package per-platform archives
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          APP=dist/topic-timer
+          mkdir -p out
+          zip -j "out/topic-timer-${VERSION}-win_x64.zip" \
+            "$APP/topic-timer-win_x64.exe" "$APP/resources.neu"
+          zip -j "out/topic-timer-${VERSION}-mac_universal.zip" \
+            "$APP/topic-timer-mac_universal" "$APP/resources.neu"
+          tar -czf "out/topic-timer-${VERSION}-linux_x64.tar.gz" \
+            -C "$APP" topic-timer-linux_x64 resources.neu
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true

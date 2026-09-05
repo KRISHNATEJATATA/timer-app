@@ -1,0 +1,5 @@
+# Pause- and Stop-finalize sessions; log written only at session end; no recovery prompt
+
+A Session is finalized (written to `log.json`) the moment it is Stopped **or** Paused; Resume starts a new Session on the same topic from zero. The widget therefore never holds an "open" session across process death, writes the log only at finalization (Start/Pause/Stop/12h-cap events, not per second), and needs no crash-recovery prompt: the worst case of an unclean exit is losing the accrual since the last finalize, by design. The 12-hour cap finalizes the session and shows a notice with Resume (new Session) available. The log's `open` field is now always `null` and is kept in the schema only so a dashboard can rely on a stable shape.
+
+Display continuity vs log truth: the widget clock continues from the paused total across Resume chains (chainBase), while each Session logs only its own elapsed time — the dashboard reconstructs the true work block by summing back-to-back same-topic sessions, and it must never trust the widget clock's displayed total as one session. While paused, the topic is locked: Resume continues it, Stop dismisses the chain and unlocks topic entry.

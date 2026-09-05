@@ -1,0 +1,20 @@
+# Personal data — never publish
+data/
+log_before_edit.json
+CONTEXT.md
+idea.md
+
+# Local agent tooling
+.agents/
+.kilo/
+
+# Dependencies and build artifacts
+node_modules/
+bin/
+dist/
+
+# Logs and scratch files
+*.log
+temp/
+image.png
+.DS_Store

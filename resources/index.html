@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" href="data:," />
+  <title>Topic Timer</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="js/core.js"></script>
+  <script src="js/neutralino.js"></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <div id="widget">
+    <header id="dragbar">
+      <span class="app-name">Topic Timer</span>
+      <button id="btnExit" title="Exit Topic Timer">&#10005;</button>
+    </header>
+    <input id="topicInput" type="text" placeholder="Topic name&hellip;" maxlength="80" autocomplete="off" spellcheck="false" />
+    <div id="clock">00:00:00</div>
+    <div id="status">Idle &mdash; type a topic and press Start</div>
+    <div id="notice" hidden>12h cap reached &mdash; the session was logged. Resume to start a new session.</div>
+    <div id="actions">
+      <button id="btnStart" disabled>Start</button>
+      <button id="btnPause" hidden>Pause</button>
+      <button id="btnResume" hidden>Resume</button>
+      <button id="btnStop" hidden>Stop</button>
+    </div>
+    <footer>
+      <button id="btnAdd">Add Session</button>
+      <button id="btnExport">Export CSV</button>
+    </footer>
+    <div id="addForm" hidden>
+      <div class="add-title">Add session</div>
+      <input id="addTopic" type="text" placeholder="Topic name&hellip;" maxlength="80" autocomplete="off" spellcheck="false" />
+      <label for="addStart">Start</label>
+      <input id="addStart" type="datetime-local" />
+      <label for="addEnd">End</label>
+      <input id="addEnd" type="datetime-local" />
+      <div id="addError" hidden></div>
+      <div class="add-actions">
+        <button id="btnAddSave">Add</button>
+        <button id="btnAddCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

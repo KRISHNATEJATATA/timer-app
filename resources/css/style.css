@@ -1,0 +1,238 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #widget { height: 100%; }
+
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  background: #15181f;
+  color: #e8eaf0;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  position: relative;
+}
+
+#dragbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: move;
+  flex: none;
+}
+
+.app-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a93a6;
+}
+
+#btnExit {
+  background: none;
+  border: none;
+  color: #8a93a6;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+#btnExit:hover { color: #ff7b7b; }
+
+#topicInput {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  color: inherit;
+  background: #222733;
+  border: 1px solid #303748;
+  border-radius: 6px;
+  outline: none;
+  user-select: text;
+}
+
+#topicInput:focus { border-color: #4f8cff; }
+#topicInput:disabled { opacity: 0.75; }
+
+#clock {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 38px;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: 0.02em;
+  padding: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+#status {
+  text-align: center;
+  color: #8a93a6;
+  min-height: 16px;
+}
+
+#notice {
+  background: #3a2f14;
+  border: 1px solid #6b571f;
+  color: #ffd479;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 12px;
+}
+
+#actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+#actions button {
+  flex: 1;
+  padding: 9px 0;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid #303748;
+  border-radius: 6px;
+  background: #222733;
+  color: inherit;
+  cursor: pointer;
+}
+
+#actions button:hover:enabled { filter: brightness(1.2); }
+#actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+#btnStart { background: #1f6f3f; border-color: #27874d; }
+#btnStop { background: #6f1f2a; border-color: #87252f; }
+
+footer {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+#btnExport,
+#btnAdd {
+  background: none;
+  border: none;
+  color: #4f8cff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+#addForm {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 15, 20, 0.97);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  overflow-y: auto;
+  user-select: text;
+}
+
+#addForm[hidden] { display: none; }
+
+.add-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a93a6;
+}
+
+#addForm input {
+  width: 100%;
+  padding: 7px 9px;
+  font: inherit;
+  color: inherit;
+  background: #222733;
+  border: 1px solid #303748;
+  border-radius: 6px;
+  outline: none;
+}
+
+#addForm input:focus { border-color: #4f8cff; }
+
+#addForm label {
+  font-size: 11px;
+  color: #8a93a6;
+  margin-top: 2px;
+}
+
+#addError {
+  background: #3a1414;
+  border: 1px solid #6b1f1f;
+  color: #ff9b9b;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+#addError[hidden] { display: none; }
+
+.add-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.add-actions button {
+  flex: 1;
+  padding: 8px 0;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid #303748;
+  border-radius: 6px;
+  background: #222733;
+  color: inherit;
+  cursor: pointer;
+}
+
+.add-actions button:hover { filter: brightness(1.2); }
+#btnAddSave { background: #1f6f3f; border-color: #27874d; }
+
+#recovery {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 15, 20, 0.97);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  justify-content: center;
+}
+
+#recovery[hidden] { display: none; }
+
+#recovery p {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #cfd5e1;
+}
+
+#recovery button {
+  padding: 8px 0;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid #303748;
+  background: #222733;
+  color: inherit;
+  cursor: pointer;
+}
+
+#recovery button:hover { filter: brightness(1.2); }
+#recCount { background: #1f6f3f; border-color: #27874d; }
+#recDiscard { background: #6f1f2a; border-color: #87252f; }

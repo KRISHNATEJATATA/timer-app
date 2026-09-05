@@ -1,0 +1,3 @@
+# No in-app review, stats, or editing — the raw JSON log is the surface
+
+idea.md asked for in-app review, summaries, and statistics (requirements 5 and 7). During design the owner chose the raw human-readable JSON log file as the review surface instead: no session list, no filters, no averages in the app, and no edit/delete UI for stopped Sessions — accidental entries are removed by editing the JSON by hand. This deliberately narrows the app to a single desktop widget (topic field, clock, Start/Pause/Stop, CSV export). If you are about to add a stats screen or session editor, re-check with the owner first — this cut was explicit, not an omission.

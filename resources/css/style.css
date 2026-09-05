@@ -36,6 +36,13 @@ body {
   color: #8a93a6;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#btnSettings,
 #btnExit {
   background: none;
   border: none;
@@ -46,6 +53,7 @@ body {
   cursor: pointer;
 }
 
+#btnSettings:hover { color: #4f8cff; }
 #btnExit:hover { color: #ff7b7b; }
 
 #topicInput {
@@ -202,6 +210,64 @@ footer {
 
 .add-actions button:hover { filter: brightness(1.2); }
 #btnAddSave { background: #1f6f3f; border-color: #27874d; }
+
+#settingsPanel {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 15, 20, 0.97);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+#settingsPanel[hidden] { display: none; }
+
+#settingsPath {
+  width: 100%;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  background: #222733;
+  border: 1px solid #303748;
+  border-radius: 6px;
+  outline: none;
+  user-select: text;
+}
+
+#settingsError {
+  background: #3a1414;
+  border: 1px solid #6b1f1f;
+  color: #ff9b9b;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+#settingsError[hidden] { display: none; }
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.settings-actions button {
+  flex: 1;
+  padding: 8px 0;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid #303748;
+  border-radius: 6px;
+  background: #222733;
+  color: inherit;
+  cursor: pointer;
+}
+
+.settings-actions button:hover { filter: brightness(1.2); }
+#btnSettingsDone { background: #1f6f3f; border-color: #27874d; }
 
 #recovery {
   position: absolute;

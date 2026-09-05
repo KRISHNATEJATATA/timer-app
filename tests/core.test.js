@@ -78,4 +78,19 @@ assert.ok(T.manualSessionError('Email', '2026-09-04T10:00', '2026-09-05T11:00', 
 assert.ok(T.manualSessionError('Email', '2026-09-05T10:00', '2026-09-05T13:00', T.CAP_SECONDS, NOW).includes('future'));
 assert.strictEqual(T.manualSessionError('Email', '2026-09-05T11:59:30', '2026-09-05T12:00:30', T.CAP_SECONDS, NOW), null, '60s future grace');
 
+assert.deepStrictEqual(T.mergeSessions([], []), [], 'merge of empty lists');
+assert.deepStrictEqual(
+  T.mergeSessions([{ topic: 'A' }], [{ topic: 'B' }]),
+  [{ topic: 'A' }, { topic: 'B' }],
+  'merge keeps both sides in order'
+);
+const dup = { topic: 'A', start: 'x', end: 'y', elapsedSeconds: 1 };
+assert.deepStrictEqual(
+  T.mergeSessions([dup], [dup, { topic: 'B' }]),
+  [dup, { topic: 'B' }],
+  'merge drops exact duplicates'
+);
+assert.deepStrictEqual(T.mergeSessions(null, [{ topic: 'B' }]), [{ topic: 'B' }], 'merge tolerates null');
+assert.deepStrictEqual(T.mergeSessions([{ topic: 'A' }], 'garbage'), [{ topic: 'A' }], 'merge tolerates non-list');
+
 console.log('core tests passed');

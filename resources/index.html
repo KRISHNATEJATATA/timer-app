@@ -13,7 +13,10 @@
   <div id="widget">
     <header id="dragbar">
       <span class="app-name">Topic Timer</span>
-      <button id="btnExit" title="Exit Topic Timer">&#10005;</button>
+      <span class="header-actions">
+        <button id="btnSettings" title="Settings">&#9881;</button>
+        <button id="btnExit" title="Exit Topic Timer">&#10005;</button>
+      </span>
     </header>
     <input id="topicInput" type="text" placeholder="Topic name&hellip;" maxlength="80" autocomplete="off" spellcheck="false" />
     <div id="clock">00:00:00</div>
@@ -29,6 +32,16 @@
       <button id="btnAdd">Add Session</button>
       <button id="btnExport">Export CSV</button>
     </footer>
+    <div id="settingsPanel" hidden>
+      <div class="add-title">Settings</div>
+      <label for="settingsPath">Log file folder</label>
+      <input id="settingsPath" type="text" readonly />
+      <div id="settingsError" hidden></div>
+      <div class="settings-actions">
+        <button id="btnSettingsBrowse">Choose&hellip;</button>
+        <button id="btnSettingsDone">Done</button>
+      </div>
+    </div>
     <div id="addForm" hidden>
       <div class="add-title">Add session</div>
       <input id="addTopic" type="text" placeholder="Topic name&hellip;" maxlength="80" autocomplete="off" spellcheck="false" />

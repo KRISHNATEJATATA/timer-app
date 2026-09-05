@@ -93,6 +93,27 @@
     return lines.join('\r\n') + '\r\n';
   }
 
+  /* Merge two finalized-session lists, dropping exact duplicates.
+     primary entries keep their order; secondary entries are appended
+     when not already present. Used when the log moves to a new folder. */
+  function mergeSessions(primary, secondary) {
+    var seen = {};
+    var out = [];
+    var lists = [primary, secondary];
+    for (var i = 0; i < lists.length; i++) {
+      var list = Array.isArray(lists[i]) ? lists[i] : [];
+      for (var j = 0; j < list.length; j++) {
+        var entry = list[j];
+        if (!entry || typeof entry !== 'object') continue;
+        var key = JSON.stringify(entry);
+        if (seen[key]) continue;
+        seen[key] = true;
+        out.push(entry);
+      }
+    }
+    return out;
+  }
+
   var TopicCore = {
     CAP_SECONDS: CAP_SECONDS,
     normalizeTopic: normalizeTopic,
@@ -104,7 +125,8 @@
     parseManualDateTime: parseManualDateTime,
     manualSessionError: manualSessionError,
     csvEscape: csvEscape,
-    sessionsToCsv: sessionsToCsv
+    sessionsToCsv: sessionsToCsv,
+    mergeSessions: mergeSessions
   };
 
   if (typeof module !== 'undefined' && module.exports) {

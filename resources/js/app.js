@@ -18,13 +18,20 @@ var els = {
   addError: document.getElementById('addError'),
   btnAddSave: document.getElementById('btnAddSave'),
   btnAddCancel: document.getElementById('btnAddCancel'),
+  btnSettings: document.getElementById('btnSettings'),
+  settingsPanel: document.getElementById('settingsPanel'),
+  settingsPath: document.getElementById('settingsPath'),
+  settingsError: document.getElementById('settingsError'),
+  btnSettingsBrowse: document.getElementById('btnSettingsBrowse'),
+  btnSettingsDone: document.getElementById('btnSettingsDone'),
   btnExit: document.getElementById('btnExit')
 };
 
 var DATA_DIR_NAME = 'TopicTimer';
-var PREFERRED_DATA_DIR = 'C:/Office/temp/timer/data/TopicTimer';
+var SETTINGS_FILE = 'settings.json';
 var dataDir = null;
 var dataFile = null;
+var settingsFile = null;
 var ticker = null;
 var flashTimer = null;
 var state = { open: null, sessions: [], pausedTopic: null, pausedElapsed: 0, capNoticed: false, lastPersistAt: 0 };
@@ -97,29 +104,69 @@ async function createDirectoryDeep(path) {
   }
 }
 
-async function resolveDataDir() {
-  var candidates = [PREFERRED_DATA_DIR];
+/* Settings live next to the fallback default (AppData) so they survive
+   the log folder being moved. Custom dir wins; default is resolved lazily. */
+async function readSettings(defaultDir) {
   try {
-    var documents = await Neutralino.os.getPath('documents');
-    if (typeof documents === 'string' && documents.trim() !== '') {
-      candidates.push(documents.replace(/[\\/]+$/, '') + '/' + DATA_DIR_NAME);
+    var raw = await Neutralino.filesystem.readFile(settingsFile);
+    var data = JSON.parse(raw);
+    if (data && typeof data.dataDir === 'string' && data.dataDir.trim() !== '') {
+      return data.dataDir.replace(/[\\/]+$/, '');
     }
   } catch (error) {}
+  return defaultDir;
+}
+
+async function writeSettings(dataDirPath) {
+  await Neutralino.filesystem.writeFile(
+    settingsFile,
+    JSON.stringify({ dataDir: dataDirPath }, null, 2)
+  );
+}
+
+async function defaultDataDir() {
   try {
     var appData = await Neutralino.os.getPath('data');
     if (typeof appData === 'string' && appData.trim() !== '') {
-      candidates.push(appData.replace(/[\\/]+$/, '') + '/' + DATA_DIR_NAME);
+      return appData.replace(/[\\/]+$/, '') + '/' + DATA_DIR_NAME;
     }
   } catch (error) {}
-  for (var i = 0; i < candidates.length; i++) {
-    var candidate = candidates[i].replace(/[\\/]+$/, '');
-    try {
-      await createDirectoryDeep(candidate);
-      await Neutralino.filesystem.access(candidate);
-      return candidate;
-    } catch (error) {}
+  try {
+    var documents = await Neutralino.os.getPath('documents');
+    if (typeof documents === 'string' && documents.trim() !== '') {
+      return documents.replace(/[\\/]+$/, '') + '/' + DATA_DIR_NAME;
+    }
+  } catch (error) {}
+  return DATA_DIR_NAME;
+}
+
+async function readSessionsFrom(file) {
+  try {
+    var raw = await Neutralino.filesystem.readFile(file);
+    var data = JSON.parse(raw);
+    if (data && Array.isArray(data.sessions)) return data.sessions;
+  } catch (error) {}
+  return null;
+}
+
+/* Point the app at a new folder: settings are updated first, then the
+   current log is copied there. Sessions from any existing log in the
+   target folder are merged (exact duplicates dropped). */
+async function changeDataDir(newDir) {
+  var target = String(newDir).replace(/[\\/]+$/, '');
+  await createDirectoryDeep(target);
+  await Neutralino.filesystem.access(target);
+  await writeSettings(target);
+  var targetSessions = await readSessionsFrom(target + '/log.json');
+  dataDir = target;
+  dataFile = target + '/log.json';
+  if (targetSessions !== null) {
+    var merged = TopicCore.mergeSessions(targetSessions, state.sessions);
+    state.sessions = merged;
+    lastSynced = deepCopy(merged);
   }
-  return PREFERRED_DATA_DIR;
+  await writeLog();
+  return target;
 }
 
 async function ensureDataDir(dir) {
@@ -417,6 +464,48 @@ function closeAddForm() {
   els.addError.hidden = true;
 }
 
+function openSettings() {
+  els.settingsPath.value = dataDir;
+  els.settingsError.hidden = true;
+  els.settingsPanel.hidden = false;
+  els.addForm.hidden = true;
+}
+
+function closeSettings() {
+  els.settingsPanel.hidden = true;
+  els.settingsError.hidden = true;
+}
+
+async function browseForDataDir() {
+  var chosen = await Neutralino.os.showFolderDialog('Choose the folder for log.json', dataDir);
+  var path = typeof chosen === 'string' ? chosen : (chosen && chosen.path);
+  if (!path) return;
+  els.settingsPath.value = path;
+}
+
+async function applySettings() {
+  var target = String(els.settingsPath.value).trim();
+  if (target === '') {
+    els.settingsError.textContent = 'Pick a folder for the log file.';
+    els.settingsError.hidden = false;
+    return;
+  }
+  var normalized = target.replace(/[\\/]+$/, '');
+  if (normalized === dataDir) {
+    closeSettings();
+    return;
+  }
+  try {
+    await changeDataDir(normalized);
+  } catch (error) {
+    els.settingsError.textContent = 'Cannot use that folder \u2014 check the path and permissions.';
+    els.settingsError.hidden = false;
+    return;
+  }
+  closeSettings();
+  flash('Log file saved to ' + dataDir);
+}
+
 function saveAddForm() {
   var error = TopicCore.manualSessionError(els.addTopic.value, els.addStart.value, els.addEnd.value, TopicCore.CAP_SECONDS);
   if (error) {
@@ -501,7 +590,9 @@ async function loadLog() {
 }
 
 async function main() {
-  dataDir = await resolveDataDir();
+  var fallback = await defaultDataDir();
+  settingsFile = fallback + '/' + SETTINGS_FILE;
+  dataDir = await readSettings(fallback);
   dataFile = dataDir + '/log.json';
   await ensureDataDir(dataDir);
   var lock = await acquireLock(dataDir);
@@ -555,6 +646,23 @@ els.addForm.addEventListener('keydown', function (event) {
   if (event.key === 'Enter') saveAddForm();
 });
 
+els.btnSettings.addEventListener('click', openSettings);
+els.btnSettingsBrowse.addEventListener('click', function () {
+  browseForDataDir().catch(function () {
+    els.settingsError.textContent = 'Could not open the folder picker.';
+    els.settingsError.hidden = false;
+  });
+});
+els.btnSettingsDone.addEventListener('click', function () {
+  applySettings().catch(function () {
+    els.settingsError.textContent = 'Could not save the log to that folder.';
+    els.settingsError.hidden = false;
+  });
+});
+els.settingsPanel.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape') closeSettings();
+});
+
 els.btnExit.addEventListener('click', function () {
   var pending = Promise.resolve();
   if (state.open) {
@@ -585,6 +693,11 @@ if (typeof module !== 'undefined' && module.exports) {
     openAddForm: openAddForm,
     closeAddForm: closeAddForm,
     saveAddForm: saveAddForm,
+    openSettings: openSettings,
+    closeSettings: closeSettings,
+    browseForDataDir: browseForDataDir,
+    applySettings: applySettings,
+    changeDataDir: changeDataDir,
     writeLog: writeLog
   };
 }

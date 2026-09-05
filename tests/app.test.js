@@ -1,8 +1,7 @@
-﻿'use strict';
+'use strict';
 
 const assert = require('assert');
 
-const PREFERRED = 'C:/Office/temp/timer/data/TopicTimer';
 const FAKE_APPDATA = 'C:/fake/appdata';
 
 function makeFake(options) {
@@ -10,6 +9,7 @@ function makeFake(options) {
   const failCreateUnder = options.failCreateUnder || [];
   const initialFiles = Object.assign({}, options.initialFiles);
   const livePids = options.livePids || [];
+  const chosenFolder = options.chosenFolder || null;
   const calls = [];
   const api = {
     calls: calls,
@@ -35,6 +35,10 @@ function makeFake(options) {
         calls.push(['os.getPath', name]);
         if (name === 'documents') throw { code: 'NE_OS_PATHNOEX' };
         return FAKE_APPDATA;
+      },
+      async showFolderDialog(title, defaultPath) {
+        calls.push(['os.showFolderDialog', title]);
+        return chosenFolder;
       },
       async execCommand(cmd) {
         calls.push(['os.execCommand', cmd]);
@@ -129,6 +133,12 @@ async function settle() {
 function logWrites(fake) {
   return fake.writes.filter((w) => w.path.endsWith('log.json'));
 }
+
+function settingsWrites(fake) {
+  return fake.writes.filter((w) => w.path.endsWith('settings.json'));
+}
+
+const DEFAULT_DIR = FAKE_APPDATA + '/TopicTimer';
 
 async function runLifecycle(fake) {
   const app = loadApp(fake);
@@ -227,23 +237,16 @@ async function runLifecycle(fake) {
 
 (async function run() {
   await runLifecycle(makeFake());
-  const preferredFake = makeFake();
-  await runLifecycle(preferredFake);
-  const preferredAppFile = preferredFake.calls.find(
+  const defaultFake = makeFake();
+  await runLifecycle(defaultFake);
+  const defaultAppFile = defaultFake.calls.find(
     (c) => c[0] === 'filesystem.writeFile' && c[1].endsWith('log.json')
   )[1];
-  assert.strictEqual(preferredAppFile, PREFERRED + '/log.json', 'prefers the project data folder');
-
-  const failingFake = makeFake({ failCreateUnder: [PREFERRED] });
-  await runLifecycle(failingFake);
-  const fallbackDataFile = failingFake.calls.find(
-    (c) => c[0] === 'filesystem.writeFile' && c[1].endsWith('log.json')
-  )[1];
-  assert.strictEqual(fallbackDataFile, FAKE_APPDATA + '/TopicTimer/log.json', 'falls back to appdata when preferred path fails');
+  assert.strictEqual(defaultAppFile, DEFAULT_DIR + '/log.json', 'defaults to the AppData folder');
 
   const prefillFake = makeFake({
     initialFiles: {
-      [PREFERRED + '/log.json']: JSON.stringify({
+      [DEFAULT_DIR + '/log.json']: JSON.stringify({
         open: null,
         sessions: [
           { topic: 'Email', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 },
@@ -261,7 +264,7 @@ async function runLifecycle(fake) {
 
   const corruptFake = makeFake({
     initialFiles: {
-      [PREFERRED + '/log.json']: '{ not valid json !!'
+      [DEFAULT_DIR + '/log.json']: '{ not valid json !!'
     }
   });
   const corruptApp = loadApp(corruptFake);
@@ -319,7 +322,7 @@ async function runLifecycle(fake) {
 
   const recoveryFake = makeFake({
     initialFiles: {
-      [PREFERRED + '/log.json']: JSON.stringify({
+      [DEFAULT_DIR + '/log.json']: JSON.stringify({
         open: {
           topic: 'Email',
           startedAt: '2026-09-02T10:00:00+05:30',
@@ -341,7 +344,7 @@ async function runLifecycle(fake) {
   assert.strictEqual(elements.topicInput.value, 'Email', 'topic prefilled from recovered session');
 
   const lockBlockedFake = makeFake({
-    initialFiles: { [PREFERRED + '/app.lock']: '999' },
+    initialFiles: { [DEFAULT_DIR + '/app.lock']: '999' },
     livePids: [999]
   });
   const blockedApp = loadApp(lockBlockedFake);
@@ -360,7 +363,7 @@ async function runLifecycle(fake) {
   );
 
   const lockStaleFake = makeFake({
-    initialFiles: { [PREFERRED + '/app.lock']: '555' },
+    initialFiles: { [DEFAULT_DIR + '/app.lock']: '555' },
     livePids: []
   });
   const staleApp = loadApp(lockStaleFake);
@@ -427,7 +430,7 @@ async function runLifecycle(fake) {
 
   const manualEditFake = makeFake({
     initialFiles: {
-      [PREFERRED + '/log.json']: JSON.stringify({
+      [DEFAULT_DIR + '/log.json']: JSON.stringify({
         open: null,
         sessions: [
           { topic: 'Email', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 }
@@ -440,7 +443,7 @@ async function runLifecycle(fake) {
   await settle();
   assert.strictEqual(manualEditApp.state.sessions.length, 1, 'seed session loaded');
   // Owner edits the JSON while the app runs.
-  manualEditFake.filesystem._exists[PREFERRED + '/log.json'] = JSON.stringify({
+  manualEditFake.filesystem._exists[DEFAULT_DIR + '/log.json'] = JSON.stringify({
     open: null,
     sessions: [
       { topic: 'Email (edited)', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 },
@@ -458,7 +461,7 @@ async function runLifecycle(fake) {
   // App-side additions made since startup are preserved alongside manual edits.
   const appAddFake = makeFake({
     initialFiles: {
-      [PREFERRED + '/log.json']: JSON.stringify({
+      [DEFAULT_DIR + '/log.json']: JSON.stringify({
         open: null,
         sessions: [
           { topic: 'Email', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 }
@@ -475,7 +478,7 @@ async function runLifecycle(fake) {
     end: '2026-09-03T10:00:00+05:30',
     elapsedSeconds: 3600
   });
-  appAddFake.filesystem._exists[PREFERRED + '/log.json'] = JSON.stringify({
+  appAddFake.filesystem._exists[DEFAULT_DIR + '/log.json'] = JSON.stringify({
     open: null,
     sessions: [
       { topic: 'Email', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 },
@@ -489,6 +492,118 @@ async function runLifecycle(fake) {
     appAddApp.state.sessions.map((s) => s.topic),
     ['Email', 'Hand-added during run', 'Live session'],
     'file entries first, pending app entries after'
+  );
+
+  // --- Settings: custom log folder -----------------------------------------
+
+  const NEW_DIR = 'C:/users/me/TopicTimerLog';
+
+  // Folder picker cancelled -> nothing changes.
+  const cancelFake = makeFake({ chosenFolder: null });
+  const cancelApp = loadApp(cancelFake);
+  await cancelFake.events.readyHandler();
+  await settle();
+  cancelApp.openSettings();
+  assert.strictEqual(elements.settingsPanel.hidden, false, 'settings panel opens');
+  elements.settingsPath.value = '';
+  await cancelApp.applySettings();
+  await settle();
+  assert.strictEqual(elements.settingsPanel.hidden, false, 'empty path keeps panel open');
+  assert.strictEqual(elements.settingsError.hidden, false, 'error shown for empty path');
+
+  // Choosing a folder writes settings.json and moves log.json with its content.
+  const moveFake = makeFake({
+    chosenFolder: NEW_DIR,
+    initialFiles: {
+      [DEFAULT_DIR + '/log.json']: JSON.stringify({
+        open: null,
+        sessions: [
+          { topic: 'Email', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 }
+        ]
+      })
+    }
+  });
+  const moveApp = loadApp(moveFake);
+  await moveFake.events.readyHandler();
+  await settle();
+  assert.strictEqual(moveApp.state.sessions.length, 1, 'history loaded before the move');
+  moveApp.openSettings();
+  await moveApp.browseForDataDir();
+  assert.strictEqual(elements.settingsPath.value, NEW_DIR, 'picker fills the path field');
+  await moveApp.applySettings();
+  await settle();
+  const movedLog = logWrites(moveFake).find((w) => w.path === NEW_DIR + '/log.json');
+  assert.ok(movedLog, 'log written to the chosen folder');
+  assert.strictEqual(movedLog.data.sessions.length, 1, 'history carried to the new folder');
+  const settingsWrite = settingsWrites(moveFake).find((w) => w.path === DEFAULT_DIR + '/settings.json');
+  assert.ok(settingsWrite, 'choice persisted in settings.json');
+  assert.strictEqual(settingsWrite.data.dataDir, NEW_DIR, 'settings.json points at the chosen folder');
+  assert.strictEqual(elements.settingsPanel.hidden, true, 'panel closes after applying');
+
+  // Restart: settings.json routes the app to the chosen folder.
+  const restartFake = makeFake({
+    initialFiles: {
+      [DEFAULT_DIR + '/settings.json']: JSON.stringify({ dataDir: NEW_DIR }),
+      [NEW_DIR + '/log.json']: JSON.stringify({
+        open: null,
+        sessions: [
+          { topic: 'Email', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 }
+        ]
+      })
+    }
+  });
+  const restartApp = loadApp(restartFake);
+  await restartFake.events.readyHandler();
+  await settle();
+  const restartFile = restartFake.calls.find(
+    (c) => c[0] === 'filesystem.writeFile' && c[1].endsWith('log.json')
+  )[1];
+  assert.strictEqual(restartFile, NEW_DIR + '/log.json', 'saved location wins on restart');
+  assert.strictEqual(restartApp.state.sessions.length, 1, 'history loaded from the chosen folder');
+
+  // Corrupt settings.json is ignored; the default folder is used.
+  const corruptSettingsFake = makeFake({
+    initialFiles: { [DEFAULT_DIR + '/settings.json']: '{ oops' }
+  });
+  const corruptSettingsApp = loadApp(corruptSettingsFake);
+  await corruptSettingsFake.events.readyHandler();
+  await settle();
+  const corruptSettingsFile = corruptSettingsFake.calls.find(
+    (c) => c[0] === 'filesystem.writeFile' && c[1].endsWith('log.json')
+  )[1];
+  assert.strictEqual(corruptSettingsFile, DEFAULT_DIR + '/log.json', 'corrupt settings fall back to default');
+
+  // Moving onto a folder that already has a log merges both histories.
+  const mergeFake = makeFake({
+    chosenFolder: NEW_DIR,
+    initialFiles: {
+      [DEFAULT_DIR + '/log.json']: JSON.stringify({
+        open: null,
+        sessions: [
+          { topic: 'Email', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 }
+        ]
+      }),
+      [NEW_DIR + '/log.json']: JSON.stringify({
+        open: null,
+        sessions: [
+          { topic: 'Email', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 },
+          { topic: 'Reading', start: '2026-09-02T10:00:00+05:30', end: '2026-09-02T10:30:00+05:30', elapsedSeconds: 1800 }
+        ]
+      })
+    }
+  });
+  const mergeApp = loadApp(mergeFake);
+  await mergeFake.events.readyHandler();
+  await settle();
+  mergeApp.openSettings();
+  await mergeApp.browseForDataDir();
+  await mergeApp.applySettings();
+  await settle();
+  const mergedLog = logWrites(mergeFake).find((w) => w.path === NEW_DIR + '/log.json');
+  assert.deepStrictEqual(
+    mergedLog.data.sessions.map((s) => s.topic),
+    ['Email', 'Reading'],
+    'duplicate entries dropped, both histories kept'
   );
 
   console.log('app lifecycle tests passed');

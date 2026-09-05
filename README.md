@@ -12,6 +12,8 @@ A personal desktop timer that tracks how much time you spend on named topics. It
 
 Consecutive Sessions on the same Topic form a Work Block in the log.
 
+The log is stored as `log.json` in `%APPDATA%\TopicTimer` by default. Open the widget's gear icon to pick a different folder — the choice is remembered and your history is carried over and merged if the target folder already has a log.
+
 ## Dashboard
 
 A read-only summary of your topic log lives in `dashboard/` and is automatically published to GitHub Pages on every push to `main`.

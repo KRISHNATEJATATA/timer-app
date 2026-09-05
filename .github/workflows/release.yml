@@ -17,7 +17,11 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+        env:
+          TZ: Asia/Kolkata
       - run: npm test
+        env:
+          TZ: Asia/Kolkata
       - run: npx neu update
       - run: npx neu build
       - name: Package per-platform archives

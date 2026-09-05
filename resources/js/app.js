@@ -41,7 +41,7 @@ var lastSynced = [];
 var PERSIST_INTERVAL_MS = 60000;
 var SLEEP_GAP_MS = 120000;
 var lockPath = null;
-var writesBlocked = false;
+var blockedFile = null; // unreadable log we must not overwrite; scoped to that one path
 
 function exeBaseName() {
   try {
@@ -220,7 +220,7 @@ async function changeDataDir(newDir) {
   dataFile = target + '/log.json';
   try {
     await writeLog();
-    if (oldFile && oldFile !== dataFile) {
+    if (oldFile && oldFile !== dataFile && oldFile !== blockedFile) {
       await atomicWrite(oldFile, JSON.stringify({ open: null, sessions: state.sessions }, null, 2));
     }
     await writeSettings(target);
@@ -476,7 +476,7 @@ async function writeLog() {
     };
   }
   var payload = { open: open, sessions: state.sessions };
-  if (writesBlocked) {
+  if (blockedFile && dataFile === blockedFile) {
     throw new Error('The existing log file is unreadable and could not be backed up; writes are blocked to protect it.');
   }
   await atomicWrite(dataFile, JSON.stringify(payload, null, 2));
@@ -642,7 +642,7 @@ async function loadLog() {
       lastSynced = [];
       return;
     }
-    writesBlocked = true;
+    blockedFile = dataFile;
     flash('WARNING: log file unreadable and could not be backed up \u2014 not touching it. Choose a new log folder in Settings.');
     lastSynced = [];
     return;
@@ -671,6 +671,8 @@ async function loadLog() {
     TopicCore.normalizeTopic(els.topicInput.value) === ''
   ) {
     els.topicInput.value = last.topic;
+    // First paint already happened; keep the Start button in sync with the prefill.
+    els.btnStart.disabled = TopicCore.normalizeTopic(els.topicInput.value) === '';
   }
 }
 
@@ -686,20 +688,23 @@ async function main() {
   }
   var lock = await acquireLock(dataDir);
   if (!lock.acquired) {
+    var lockHint = lock.unverified
+      ? ' If this keeps happening, delete app.lock inside the log folder (' + dataDir + ') and start the app again.'
+      : '';
     try {
       await Neutralino.os.showMessageBox(
         'Topic Timer',
-        lock.unverified
+        (lock.unverified
           ? 'Topic Timer may already be running (the check could not be verified). This window will close to protect the log.'
-          : 'Topic Timer is already running (another instance holds the lock). This window will close.'
+          : 'Topic Timer is already running (another instance holds the lock). This window will close.') + lockHint
       );
     } catch (error) {}
     Neutralino.app.exit();
     return;
   }
   lockPath = lock.path;
+  render(); // first paint before loadLog can flash warnings (render resets status)
   await loadLog();
-  render();
   writeLog().catch(function () {}); // first write; loadLog already surfaced any real problem
   positionBottomRight();
 }

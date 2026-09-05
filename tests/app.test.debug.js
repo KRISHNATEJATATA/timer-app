@@ -94,9 +94,7 @@ function makeFake(options) {
       },
       async move(src, dest) {
         calls.push(['filesystem.move', src, dest]);
-        // failMove models a locked, unmovable corrupt log — fresh .tmp files
-        // we just wrote are always renamable.
-        if (failMove && !src.endsWith('.tmp')) throw { code: 'NE_FS_FILRDER' };
+        if (failMove) throw { code: 'NE_FS_FILRDER' };
         if (typeof api.filesystem._exists[src] === 'undefined') throw { code: 'NE_FS_FILRDER' };
         api.filesystem._exists[dest] = api.filesystem._exists[src];
         delete api.filesystem._exists[src];
@@ -693,7 +691,7 @@ async function runLifecycle(fake) {
   console.log('app lifecycle tests passed');
   process.exit(0);
 })().catch((error) => {
-  console.error('FAILED:', error && error.message);
+  console.error('FAILED:', error && error.stack);
   process.exit(1);
 });
 

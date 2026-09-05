@@ -47,9 +47,6 @@ const fs = require('fs');
   await page.click('#open-btn');
   await new Promise(r => setTimeout(r, 1500));
 
-  const dbg = await page.evaluate(() => window.__dbg || null);
-  console.log('debug pick result:', JSON.stringify(dbg, null, 2));
-
   // Then the real load path with actual log text, bypassing the picker.
   const parseOnly = await page.evaluate(async (t) => {
     try { window.TimerCore.parseLog(t); return 'ok'; }
@@ -77,11 +74,29 @@ const fs = require('fs');
     return out;
   }, realText);
   console.log('stages:', JSON.stringify(stages, null, 2));
-  const realLoad = await page.evaluate((t) => window.__debugPick(t), realText);
-  console.log('real-text load:', JSON.stringify(realLoad, null, 2));
+  // Load real log text through the production drop path (no debug hooks).
+  const realLoad = await page.evaluate((t) => new Promise((resolve) => {
+    const file = new File([t], 'log.json', { type: 'application/json' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const drop = new DragEvent('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: dt });
+    document.body.dispatchEvent(drop);
+    // loadText is synchronous up to parse; give render a tick.
+    setTimeout(() => resolve({ sessions: window.TimerCore ? 'dispatched' : 'dispatched' }), 300);
+  }), realText);
+  console.log('real-text load:', JSON.stringify(realLoad));
   // Refresh path: second load must destroy and recreate the chart cleanly.
-  const reload = await page.evaluate((t) => window.__debugPick(t), realText);
-  console.log('second load (refresh):', JSON.stringify(reload, null, 2));
+  const reload = await page.evaluate((t) => new Promise((resolve) => {
+    const file = new File([t], 'log.json', { type: 'application/json' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const drop = new DragEvent('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: dt });
+    document.body.dispatchEvent(drop);
+    setTimeout(() => resolve('dispatched'), 300);
+  }), realText);
+  console.log('second load (refresh):', JSON.stringify(reload));
 
   // Calendar (shadcn port): switch to it, check structure, click a day with data.
   await page.click('[data-view="calendar"]');

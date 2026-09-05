@@ -104,6 +104,25 @@ const partial = core.parseLog(JSON.stringify({
 assert.strictEqual(partial.sessions.length, 1);
 assert.strictEqual(partial.invalid, 1);
 
+// null / non-object array entries are skipped, not fatal (hand-edited logs).
+const withNulls = core.parseLog(JSON.stringify({
+  open: null,
+  sessions: [null, 42, 'oops', { topic: 'Ok', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 }]
+}));
+assert.strictEqual(withNulls.sessions.length, 1, 'null entries skipped');
+assert.strictEqual(withNulls.invalid, 3, 'each null/non-object entry counted invalid');
+
+// end before start is data corruption, not a session.
+const reversed = core.parseLog(JSON.stringify({
+  open: null,
+  sessions: [
+    { topic: 'Backwards', start: '2026-09-01T10:00:00+05:30', end: '2026-09-01T09:00:00+05:30', elapsedSeconds: 3600 },
+    { topic: 'Ok', start: '2026-09-01T09:00:00+05:30', end: '2026-09-01T09:30:00+05:30', elapsedSeconds: 1800 }
+  ]
+}));
+assert.strictEqual(reversed.sessions.length, 1, 'end<start rejected');
+assert.strictEqual(reversed.invalid, 1);
+
 // Open snapshot becomes live data, excluded from sessions.
 const withOpen = core.parseLog(JSON.stringify({
   open: { topic: 'Deep work', startedAt: '2026-09-09T10:00:00+05:30', elapsedSeconds: 300, savedAt: '2026-09-09T10:05:00+05:30' },

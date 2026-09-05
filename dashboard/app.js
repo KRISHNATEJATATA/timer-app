@@ -80,27 +80,6 @@
     }
   }
 
-  // Diagnostic hook (also usable from the console): pass text to skip the picker.
-  window.__debugPick = async function (textOverride) {
-    const t0 = performance.now();
-    try {
-      let text;
-      if (textOverride != null) {
-        text = textOverride;
-      } else {
-        const [handle] = await window.showOpenFilePicker();
-        const file = await handle.getFile();
-        text = await file.text();
-      }
-      window.__dbg = { step: 'gotText', len: text.length, ms: Math.round(performance.now() - t0) };
-      await loadText(text);
-      window.__dbg = { step: 'loaded', len: text.length, ms: Math.round(performance.now() - t0), sessions: state.sessions.length };
-    } catch (e) {
-      window.__dbg = { step: 'threw', name: e && e.name, msg: e && e.message, ms: Math.round(performance.now() - t0) };
-    }
-    return window.__dbg;
-  };
-
   async function readHandle() {
     if (!state.fileHandle) return;
     try {
@@ -275,7 +254,7 @@
     fillTable('topic-table', sortFor('topic', topics), t => [
       '<span class="topic-link" data-key="' + esc(t.key) + '">' + esc(t.display) + '</span>',
       fmtDuration(t.totalSeconds), String(t.sessionCount), fmtDuration(t.avgSeconds)
-    ], ['num', 'num', 'num']);
+    ], [1, 2, 3]);
   }
 
   function renderTopicFilter() {
@@ -302,7 +281,7 @@
     const rows = sortFor('session', filteredSessions());
     fillTable('session-table', rows, s => [
       fmtDateTime(s.start), fmtTime(s.end), esc(s.topic.trim()), fmtDuration(s.elapsedSeconds)
-    ], ['num']);
+    ], [3]);
     const shown = rows.length;
     const totalAll = state.sessions.length;
     $('session-count').textContent = 'Showing ' + shown + ' of ' + totalAll + ' sessions' +
@@ -313,22 +292,22 @@
     const rows = sortFor('block', core.workBlocks(filteredSessions()));
     fillTable('block-table', rows, b => [
       fmtDateTime(b.start), fmtDateTime(b.end), esc(b.topic), fmtDuration(b.totalSeconds), String(b.sessionCount)
-    ], ['num', 'num']);
+    ], [3, 4]);
   }
 
   function renderSummaries() {
     const daily = core.dailyTotals(state.sessions);
     fillRows('day-table', [...daily.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).reverse(),
-      ([day, secs]) => [fmtDayLong(day), fmtDuration(secs)], ['num']);
+      ([day, secs]) => [fmtDayLong(day), fmtDuration(secs)], [1]);
 
     const weeks = core.weeklyTotals(daily);
     fillRows('week-table', weeks.slice().reverse(),
-      (w) => [w.key, String(w.days), fmtDuration(w.seconds)], ['num', 'num']);
+      (w) => [w.key, String(w.days), fmtDuration(w.seconds)], [1, 2]);
 
     const months = core.monthlyTotals(daily);
     fillRows('month-table', months.slice().reverse(),
       (mo) => { const [y, m] = mo.key.split('-').map(Number); return [new Date(y, m - 1, 1).toLocaleDateString([], { year: 'numeric', month: 'long' }), fmtDuration(mo.seconds)]; },
-      ['num']);
+      [1]);
   }
 
   // ---- Stable topic colors -------------------------------------------------

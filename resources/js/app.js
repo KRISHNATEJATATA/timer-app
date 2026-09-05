@@ -21,6 +21,7 @@ var els = {
   btnSettings: document.getElementById('btnSettings'),
   settingsPanel: document.getElementById('settingsPanel'),
   settingsPath: document.getElementById('settingsPath'),
+  settingsVersion: document.getElementById('settingsVersion'),
   settingsError: document.getElementById('settingsError'),
   btnSettingsBrowse: document.getElementById('btnSettingsBrowse'),
   btnSettingsDone: document.getElementById('btnSettingsDone'),
@@ -40,14 +41,28 @@ var lastSynced = [];
 var PERSIST_INTERVAL_MS = 60000;
 var SLEEP_GAP_MS = 120000;
 var lockPath = null;
+var writesBlocked = false;
 
 function exeBaseName() {
   try {
     var args = (typeof window !== 'undefined' && window.NL_ARGS) || [];
     var parts = String(args[0] || '').split(/[\\/]/);
-    return parts[parts.length - 1] || '';
+    return (parts[parts.length - 1] || '').replace(/^"+|"+$/g, '');
   } catch (error) {
     return '';
+  }
+}
+
+/* Write to <path>.tmp then rename into place, so a crash mid-write can
+   never leave a truncated log.json behind. */
+async function atomicWrite(path, text) {
+  var tmp = path + '.tmp';
+  await Neutralino.filesystem.writeFile(tmp, text);
+  try {
+    await Neutralino.filesystem.move(tmp, path);
+  } catch (error) {
+    await Neutralino.filesystem.remove(path);
+    await Neutralino.filesystem.move(tmp, path);
   }
 }
 
@@ -66,17 +81,20 @@ async function acquireLock(dir) {
   } catch (error) {}
   if (existing !== null && existing !== undefined) {
     var existingPid = parseInt(String(existing).trim(), 10);
-    var alive = false;
+    var alive = null;
     if (!isNaN(existingPid)) {
       try {
         var res = await Neutralino.os.execCommand('tasklist /FI "PID eq ' + existingPid + '" /NH');
-        var out = res && (res.output || res);
+        var out = res && (res.output || res) || '';
         var base = exeBaseName();
-        alive = base !== '' && String(out).indexOf(base) !== -1 && String(out).indexOf(String(existingPid)) !== -1;
+        if (String(out).indexOf('INFO:') !== -1) alive = false;
+        else if (base !== '' && String(out).indexOf(String(existingPid)) !== -1 && String(out).indexOf(base) !== -1) alive = true;
+        else alive = null;
       } catch (error) {
-        alive = false;
+        alive = null;
       }
     }
+    if (alive === null) return { acquired: false, path: path, unverified: true };
     if (alive) return { acquired: false, path: path };
   }
   try {
@@ -85,11 +103,15 @@ async function acquireLock(dir) {
   return { acquired: true, path: path };
 }
 
-async function releaseLock() {
-  if (!lockPath) return;
+async function releasePath(path) {
+  if (!path) return;
   try {
-    await Neutralino.filesystem.remove(lockPath);
+    await Neutralino.filesystem.remove(path);
   } catch (error) {}
+}
+
+async function releaseLock() {
+  return releasePath(lockPath);
 }
 
 async function createDirectoryDeep(path) {
@@ -118,7 +140,7 @@ async function readSettings(defaultDir) {
 }
 
 async function writeSettings(dataDirPath) {
-  await Neutralino.filesystem.writeFile(
+  await atomicWrite(
     settingsFile,
     JSON.stringify({ dataDir: dataDirPath }, null, 2)
   );
@@ -149,23 +171,57 @@ async function readSessionsFrom(file) {
   return null;
 }
 
-/* Point the app at a new folder: settings are updated first, then the
-   current log is copied there. Sessions from any existing log in the
-   target folder are merged (exact duplicates dropped). */
+/* Point the app at a new folder. Order matters: validate the folder, take
+   its lock, merge + write the log there, snapshot the old folder, and only
+   then persist the choice. If anything fails, nothing points at the new
+   folder and the old history stays untouched. */
 async function changeDataDir(newDir) {
   var target = String(newDir).replace(/[\\/]+$/, '');
+  if (target === dataDir) return target;
   await createDirectoryDeep(target);
   await Neutralino.filesystem.access(target);
-  await writeSettings(target);
   var targetSessions = await readSessionsFrom(target + '/log.json');
-  dataDir = target;
-  dataFile = target + '/log.json';
+  if (targetSessions === null) {
+    var targetFile = target + '/log.json';
+    var corruptThere = false;
+    try {
+      await Neutralino.filesystem.access(targetFile);
+      corruptThere = true;
+    } catch (error) {}
+    if (corruptThere) {
+      await Neutralino.filesystem.move(targetFile, target + '/log.corrupt-' + Date.now() + '.bak');
+    }
+  }
+  var lock = await acquireLock(target);
+  if (!lock.acquired) {
+    throw new Error(lock.unverified
+      ? 'Another Topic Timer may be using that folder (could not verify).'
+      : 'Another Topic Timer instance is using that folder.');
+  }
+  var oldDir = dataDir;
+  var oldFile = dataFile;
+  var oldLock = lockPath;
   if (targetSessions !== null) {
     var merged = TopicCore.mergeSessions(targetSessions, state.sessions);
     state.sessions = merged;
     lastSynced = deepCopy(merged);
   }
-  await writeLog();
+  dataDir = target;
+  dataFile = target + '/log.json';
+  try {
+    await writeLog();
+    if (oldFile && oldFile !== dataFile) {
+      await atomicWrite(oldFile, JSON.stringify({ open: null, sessions: state.sessions }, null, 2));
+    }
+    await writeSettings(target);
+  } catch (error) {
+    dataDir = oldDir;
+    dataFile = oldFile;
+    await releasePath(lock.path);
+    throw error;
+  }
+  await releasePath(oldLock);
+  lockPath = lock.path;
   return target;
 }
 
@@ -382,7 +438,9 @@ function tick() {
   renderClock();
   if (now - state.lastPersistAt >= PERSIST_INTERVAL_MS) {
     state.lastPersistAt = now;
-    writeLog().catch(function () {});
+    writeLog().catch(function () {
+      flash('Warning: could not write the log file');
+    });
   }
 }
 
@@ -408,7 +466,10 @@ async function writeLog() {
     };
   }
   var payload = { open: open, sessions: state.sessions };
-  await Neutralino.filesystem.writeFile(dataFile, JSON.stringify(payload, null, 2));
+  if (writesBlocked) {
+    throw new Error('The existing log file is unreadable and could not be backed up; writes are blocked to protect it.');
+  }
+  await atomicWrite(dataFile, JSON.stringify(payload, null, 2));
   lastSynced = deepCopy(state.sessions);
 }
 
@@ -467,6 +528,9 @@ function closeAddForm() {
 function openSettings() {
   els.settingsPath.value = dataDir;
   els.settingsError.hidden = true;
+  els.settingsVersion.textContent = (typeof window !== 'undefined' && window.NL_APPVERSION)
+    ? 'v' + window.NL_APPVERSION
+    : '';
   els.settingsPanel.hidden = false;
   els.addForm.hidden = true;
 }
@@ -477,7 +541,7 @@ function closeSettings() {
 }
 
 async function browseForDataDir() {
-  var chosen = await Neutralino.os.showFolderDialog('Choose the folder for log.json', dataDir);
+  var chosen = await Neutralino.os.showFolderDialog('Choose the folder for log.json', { defaultPath: dataDir });
   var path = typeof chosen === 'string' ? chosen : (chosen && chosen.path);
   if (!path) return;
   els.settingsPath.value = path;
@@ -557,12 +621,19 @@ async function loadLog() {
   try {
     data = JSON.parse(raw);
   } catch (error) {
+    var bak = dataDir + '/log.corrupt-' + Date.now() + '.bak';
+    var quarantined = false;
     try {
-      await Neutralino.filesystem.rename(dataFile, dataDir + '/log.corrupt.bak');
-      flash('Log file was unreadable; started fresh (bad file kept as log.corrupt.bak)');
-    } catch (renameError) {
-      flash('Log file was unreadable; started fresh');
+      await Neutralino.filesystem.move(dataFile, bak);
+      quarantined = true;
+    } catch (moveError) {}
+    if (quarantined) {
+      flash('Log file was unreadable; started fresh (bad file kept as ' + bak.split('/').pop() + ')');
+      lastSynced = [];
+      return;
     }
+    writesBlocked = true;
+    flash('WARNING: log file unreadable and could not be backed up \u2014 not touching it. Choose a new log folder in Settings.');
     lastSynced = [];
     return;
   }
@@ -598,13 +669,19 @@ async function main() {
   settingsFile = fallback + '/' + SETTINGS_FILE;
   dataDir = await readSettings(fallback);
   dataFile = dataDir + '/log.json';
-  await ensureDataDir(dataDir);
+  try {
+    await ensureDataDir(dataDir);
+  } catch (error) {
+    flash('WARNING: cannot access the log folder (' + dataDir + '). Sessions will not be saved until you pick a folder in Settings.');
+  }
   var lock = await acquireLock(dataDir);
   if (!lock.acquired) {
     try {
       await Neutralino.os.showMessageBox(
         'Topic Timer',
-        'Topic Timer is already running (another instance holds the lock). This window will close.'
+        lock.unverified
+          ? 'Topic Timer may already be running (the check could not be verified). This window will close to protect the log.'
+          : 'Topic Timer is already running (another instance holds the lock). This window will close.'
       );
     } catch (error) {}
     Neutralino.app.exit();
@@ -613,7 +690,7 @@ async function main() {
   lockPath = lock.path;
   await loadLog();
   render();
-  writeLog().catch(function () {});
+  writeLog().catch(function () {}); // first write; loadLog already surfaced any real problem
   positionBottomRight();
 }
 
@@ -668,14 +745,22 @@ els.settingsPanel.addEventListener('keydown', function (event) {
 });
 
 els.btnExit.addEventListener('click', function () {
-  var pending = Promise.resolve();
+  var pending = Promise.resolve(true);
   if (state.open) {
     finalizeSession();
-    pending = writeLog().catch(function () {});
+    pending = writeLog().then(function () { return true; }, function () { return false; });
   }
-  pending.then(function () {
-    releaseLock().finally(function () {
-      Neutralino.app.exit();
+  pending.then(function (saved) {
+    var proceed = saved
+      ? Promise.resolve()
+      : Neutralino.os.showMessageBox(
+          'Topic Timer',
+          'The final session could not be written to the log file (disk full or file locked?). It will be lost when the app exits.'
+        ).catch(function () {});
+    proceed.then(function () {
+      releaseLock().finally(function () {
+        Neutralino.app.exit();
+      });
     });
   });
 });
@@ -683,7 +768,7 @@ els.btnExit.addEventListener('click', function () {
 document.addEventListener('mousedown', function (event) {
   if (event.button !== 0) return;
   if (event.target.closest('button, input')) return;
-  Neutralino.window.drag();
+  Neutralino.window.beginDrag(event.screenX, event.screenY);
 });
 
 if (typeof module !== 'undefined' && module.exports) {

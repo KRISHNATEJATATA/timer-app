@@ -25,12 +25,17 @@
     const out = { status: 'empty', sessions: [], open: null, invalid: 0 };
     const raw = Array.isArray(data.sessions) ? data.sessions : [];
     for (const s of raw) {
+      if (!s || typeof s !== 'object') {
+        out.invalid += 1;
+        continue;
+      }
       const start = Date.parse(s.start);
       const end = Date.parse(s.end);
       const elapsed = Number(s.elapsedSeconds);
       if (
         typeof s.topic === 'string' && s.topic.trim() !== '' &&
         Number.isFinite(start) && Number.isFinite(end) &&
+        end >= start &&
         Number.isFinite(elapsed) && elapsed >= 0
       ) {
         out.sessions.push({

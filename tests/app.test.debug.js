@@ -657,8 +657,13 @@ async function runLifecycle(fake) {
   await settle();
   await moveFailApp.openSettings();
   await moveFailApp.browseForDataDir();
-  await moveFailApp.applySettings();
-  assert.strictEqual(elements.settingsError.hidden, false, 'folder change reports failure when the log cannot be copied');
+  let moveFailed = false;
+  try {
+    await moveFailApp.applySettings();
+  } catch (error) {
+    moveFailed = true;
+  }
+  assert.strictEqual(moveFailed, true, 'folder change reports failure when the log cannot be copied');
   assert.strictEqual(settingsWrites(moveFailFake).length, 0, 'settings.json not written for a failed move');
   assert.strictEqual(moveFailApp.state.sessions.length, 1, 'history intact after failed move');
   const afterFailWrite = logWrites(moveFailFake)[logWrites(moveFailFake).length - 1];
@@ -675,7 +680,7 @@ async function runLifecycle(fake) {
   console.log('app lifecycle tests passed');
   process.exit(0);
 })().catch((error) => {
-  console.error('FAILED:', error && error.message);
+  console.error('FAILED:', error && error.stack);
   process.exit(1);
 });
 

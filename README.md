@@ -28,7 +28,13 @@ Grab the latest build for your platform from [Releases](https://github.com/KRISH
 | macOS | `topic-timer-*-mac_universal.zip` |
 | Linux | `topic-timer-*-linux_x64.tar.gz` |
 
-Each archive contains the platform binary plus `resources.neu`; keep both files together and run the binary.
+Each archive contains the platform binary plus `resources.neu`; **keep both files together in one folder** and run the binary. SHA-256 checksums are published alongside each release (`SHA256SUMS.txt`).
+
+### Windows first-run notes
+
+1. **Extract the ZIP first** (right-click → Extract All). Running the EXE from inside the ZIP view fails: Windows extracts only the EXE, leaving `resources.neu` behind.
+2. **SmartScreen**: the app is unsigned, so the first launch shows "Windows protected your PC". Click **More info → Run anyway**. This is expected for any unsigned app; the app has no network access and needs no admin rights.
+3. Requires WebView2 Runtime (preinstalled on Windows 11 and any Windows 10 with updated Edge).
 
 ## Development
 

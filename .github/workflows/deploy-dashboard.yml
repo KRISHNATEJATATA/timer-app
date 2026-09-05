@@ -25,9 +25,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare Pages artifact (dashboard only, no test files)
+        run: |
+          mkdir -p pages/dashboard
+          cp -r dashboard/. pages/dashboard/
+          rm -f pages/dashboard/test.js pages/dashboard/test-fixture.json pages/dashboard/README.md
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dashboard
+          path: pages/dashboard
       - uses: actions/deploy-pages@v4
         id: deployment

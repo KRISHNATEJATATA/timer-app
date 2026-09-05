@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,9 +19,21 @@ jobs:
       - run: npm ci
         env:
           TZ: Asia/Kolkata
-      - run: npm test
+      - name: Run test suite
+        run: npm test
         env:
           TZ: Asia/Kolkata
+      - name: Stamp release version into the app
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('neutralino.config.json', 'utf8'));
+            cfg.version = process.env.VERSION;
+            fs.writeFileSync('neutralino.config.json', JSON.stringify(cfg, null, 2) + '\n');
+          "
+        env:
+          VERSION: ${{ github.ref_name }}
       - run: npx neu update
       - run: npx neu build
       - name: Package per-platform archives
@@ -35,6 +47,56 @@ jobs:
             "$APP/topic-timer-mac_universal" "$APP/resources.neu"
           tar -czf "out/topic-timer-${VERSION}-linux_x64.tar.gz" \
             -C "$APP" topic-timer-linux_x64 resources.neu
+      - name: Verify archive structure and publish checksums
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd out
+          unzip -l "topic-timer-${VERSION}-win_x64.zip" | grep -q 'topic-timer-win_x64.exe'
+          unzip -l "topic-timer-${VERSION}-win_x64.zip" | grep -q 'resources.neu'
+          for f in topic-timer-*.zip topic-timer-*.tar.gz; do
+            sha256sum "$f" >> SHA256SUMS.txt
+          done
+          cat SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: out/*
+          retention-days: 3
+
+  windows-smoke:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: .
+      - name: Extract and launch the built exe
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem *.zip | Where-Object { $_.Name -like '*win_x64*' } | Select-Object -First 1
+          Expand-Archive -Path $zip.FullName -DestinationPath app -Force
+          $files = Get-ChildItem app | Select-Object -ExpandProperty Name
+          Write-Host "Extracted: $($files -join ', ')"
+          if (($files -notcontains 'topic-timer-win_x64.exe') -or ($files -notcontains 'resources.neu')) {
+            throw 'Archive does not contain both required files'
+          }
+          Start-Process -FilePath 'app\topic-timer-win_x64.exe'
+          Start-Sleep -Seconds 12
+          $proc = Get-Process -Name topic-timer-win_x64 -ErrorAction SilentlyContinue
+          if (-not $proc) { throw 'Widget process is not running after 12s — startup failed' }
+          Write-Host "Widget process alive (PID $($proc.Id))"
+          Stop-Process -Name topic-timer-win_x64 -Force
+          Write-Host 'Smoke test passed'
+
+  release:
+    needs: windows-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: out
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*

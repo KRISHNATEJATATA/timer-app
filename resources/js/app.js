@@ -82,16 +82,26 @@ async function acquireLock(dir) {
   if (existing !== null && existing !== undefined) {
     var existingPid = parseInt(String(existing).trim(), 10);
     var alive = null;
-    if (!isNaN(existingPid)) {
+    if (isNaN(existingPid)) {
+      alive = false; // lock without a usable PID — treat as stale
+    } else {
       try {
         var res = await Neutralino.os.execCommand('tasklist /FI "PID eq ' + existingPid + '" /NH');
-        var out = res && (res.output || res) || '';
+        var out = String((res && (res.output || res)) || '');
         var base = exeBaseName();
-        if (String(out).indexOf('INFO:') !== -1) alive = false;
-        else if (base !== '' && String(out).indexOf(String(existingPid)) !== -1 && String(out).indexOf(base) !== -1) alive = true;
-        else alive = null;
+        if (out.trim() === '') {
+          alive = null; // empty output: cannot verify
+        } else if (out.indexOf(String(existingPid)) === -1) {
+          alive = false; // no task with that PID exists (locale-proof: the INFO line never contains it)
+        } else if (base !== '' && out.indexOf(base) !== -1) {
+          alive = true; // the PID belongs to our exe: another instance is live
+        } else if (base !== '') {
+          alive = false; // PID reused by a different program: the lock holder is gone
+        } else {
+          alive = null; // cannot verify the image name
+        }
       } catch (error) {
-        alive = null;
+        alive = null; // tasklist unavailable: fail closed
       }
     }
     if (alive === null) return { acquired: false, path: path, unverified: true };
